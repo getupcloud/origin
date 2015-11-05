@@ -1,0 +1,5 @@
+deploymentconfigs/docker-registry
+  host path /mnt/shared/docker-registry-build as dist-build
+    mounted at /distribution
+  NFS 192.168.122.1:/var/shared/persistent-registry-volume as registry-storage
+    mounted at /registry

@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: DeploymentConfig
+metadata:
+  creationTimestamp: 2015-11-04T18:02:19Z
+  labels:
+    docker-registry: default
+  name: docker-registry
+  namespace: default
+  resourceVersion: "35107"
+  selfLink: /oapi/v1/namespaces/default/deploymentconfigs/docker-registry
+  uid: 30ab24a1-831e-11e5-8629-525400045043
+spec:
+  replicas: 1
+  selector:
+    docker-registry: default
+  strategy:
+    resources: {}
+    rollingParams:
+      intervalSeconds: 1
+      maxSurge: 25%
+      maxUnavailable: 25%
+      timeoutSeconds: 600
+      updatePeriodSeconds: 1
+    type: Rolling
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        docker-registry: default
+    spec:
+      containers:
+      - env:
+        - name: OPENSHIFT_CA_DATA
+          value: |
+            -----BEGIN CERTIFICATE-----
+            MIIC5jCCAdCgAwIBAgIBATALBgkqhkiG9w0BAQswJjEkMCIGA1UEAwwbb3BlbnNo
+            aWZ0LXNpZ25lckAxNDQ2NjQzNzQzMB4XDTE1MTEwNDEzMjkwM1oXDTIwMTEwMjEz
+            MjkwNFowJjEkMCIGA1UEAwwbb3BlbnNoaWZ0LXNpZ25lckAxNDQ2NjQzNzQzMIIB
+            IjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoLadoqXG1A78+BXKd03WKe7f
+            PSkyUdkSnjCxTwM2K3eHUQLAiGblOh5exzjSkydefSzpWlNx3F2PDeYIjieE9gfT
+            JDxs5I4Qp3B6a+WgKKrpRGdr5OlMafeKLumBMFoBoVkGe7VxZttRxmPJnKKooN8V
+            0EHquSmYwmIZV0jjGpyAMF6avs1LcgcXNclR+zDrbSoT8jy4kxkeRiZCziHAZecw
+            9x8Tnr3E3O/cWPrwapeLkNqQ5hR1GXjMbgxQfgtjJeTQsIt5skZFnnJ8fQG1qILg
+            lpHFkTBXNO3dwfDaP1nTGBRxAK1Ccv4p4VbgwEhzAVHO2w6aKHRNkGI/gdA4bwID
+            AQABoyMwITAOBgNVHQ8BAf8EBAMCAKQwDwYDVR0TAQH/BAUwAwEB/zALBgkqhkiG
+            9w0BAQsDggEBAJ/J4AhjObodyTp0WYxSkzxnLQCD28Jxr+H1KKgi1zz5IzDQGeEw
+            k6NMJ64+N3Jho2G8Y0SQlAoSujvgZ5wOsVb8518ws+F3H2o1qMBl0C4dyGUfZyNU
+            F5Hx3mXHnk+T8e5Y1COWoiG95/cc9VRaSSy+q6AzsitrIZLT7sxfsdZ6TZiMjS59
+            anvaUl/coQndiL+woi3+R2DeHK2+++C22MfBK7Qrk9SGjpgtlCLjM7H6T4K5sWOb
+            wWTEpXgmADoD+MTBcnY9hjtzePplnOowS0IdvxVgNmkYwCk7OCK5/+dL99QFo/Ln
+            k9sRT5gEqCyfx+QAPTpcQoJytjiphBgejcQ=
+            -----END CERTIFICATE-----
+        - name: OPENSHIFT_CERT_DATA
+          value: |
+            -----BEGIN CERTIFICATE-----
+            MIIDEjCCAfygAwIBAgIBCjALBgkqhkiG9w0BAQswJjEkMCIGA1UEAwwbb3BlbnNo
+            aWZ0LXNpZ25lckAxNDQ2NjQzNzQzMB4XDTE1MTEwNDEzMjkwOVoXDTE3MTEwMzEz
+            MjkxMFowQDEaMBgGA1UEChMRc3lzdGVtOnJlZ2lzdHJpZXMxIjAgBgNVBAMTGXN5
+            c3RlbTpvcGVuc2hpZnQtcmVnaXN0cnkwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAw
+            ggEKAoIBAQCnqTRAYD0TYFRtfaNPw7qnAV1CIODLL0O8WtIMGh4oqXQ+J9sj5puQ
+            v4uTX4XwU2zYpMwX82JMMP41a2xP7ftT3dcl4dkLEK10ZIaR0liGfQPC1SwZYv+b
+            N6VjA24QVXlgvWoN377M3KPw0I200/MdCfI7uI6TPM/pNTOOHYjoVqWrHmIaGMZA
+            QP3HOvtm3AH0aAKNYBh6JTGXC0q487Bc7GOGdOIE+SwIVuJ8XFbHzR29o5NtXFKs
+            IetodHomcYIdL/9pGZoeQC+1qLLWewslB1969KSUdZmcupj7/+gms/Tt8Rde7aqr
+            yFQT3pvG1pgfuPjegq1b9onVzpWS/KN1AgMBAAGjNTAzMA4GA1UdDwEB/wQEAwIA
+            oDATBgNVHSUEDDAKBggrBgEFBQcDAjAMBgNVHRMBAf8EAjAAMAsGCSqGSIb3DQEB
+            CwOCAQEAHfpK2fCsHbpCHtvz9eHXd1ogxBbR1cKi0kiwrjtlYSwJ51guRYWy7l9H
+            iRhI3ztix13ZbTnmwxdzFmDySkmntWhNVIFTKWaniw1KWzKQXCA9oiAFYSLBvU40
+            f//ORvmnFBE9gNUv+9WpQqSAmmRasv/kCsEuXpNGqjRIS0Nc0cm9UwzHCDY7z8Fd
+            549E8ZsYFF4DjoPAVqM+9wNTPiOemAm8Vw1hLNED3KLJnVLsuclMzA5erlwve5e/
+            7DWWFCkuWM9SEPUD4BCPFCZOaaj5NvVDJ6hM8UvGOAylAdSjmZhzWon1T/z1Y5+y
+            sKcjZeZMFPQ2KWLum++D+HszhMqMPA==
+            -----END CERTIFICATE-----
+        - name: OPENSHIFT_INSECURE
+          value: "false"
+        - name: OPENSHIFT_KEY_DATA
+          value: |
+            -----BEGIN RSA PRIVATE KEY-----
+            MIIEowIBAAKCAQEAp6k0QGA9E2BUbX2jT8O6pwFdQiDgyy9DvFrSDBoeKKl0Pifb
+            I+abkL+Lk1+F8FNs2KTMF/NiTDD+NWtsT+37U93XJeHZCxCtdGSGkdJYhn0DwtUs
+            GWL/mzelYwNuEFV5YL1qDd++zNyj8NCNtNPzHQnyO7iOkzzP6TUzjh2I6Falqx5i
+            GhjGQED9xzr7ZtwB9GgCjWAYeiUxlwtKuPOwXOxjhnTiBPksCFbifFxWx80dvaOT
+            bVxSrCHraHR6JnGCHS//aRmaHkAvtaiy1nsLJQdfevSklHWZnLqY+//oJrP07fEX
+            Xu2qq8hUE96bxtaYH7j43oKtW/aJ1c6VkvyjdQIDAQABAoIBAQCRNFrbkj3zJQ+Z
+            0CD7eQGTl/vjxMPLVUDtxR57erc58iCJoE0LV7LNdwbz+NvwWuA+9OMJrzEn2Zqg
+            O0wQIYT0ioHF/kbSbXw7/MALVMh0mZsDR0otJm9HR7dF/Hd7T/uSTBmosGn31PNr
+            IcRIovO/55hSHrHkVNugFwJyh6PFy7XlszUjTmL9Al0AM6xx/hxuRNlP8tE+nVxT
+            GApLU+QzLahMC0KI4bwc7QV8keZLGIh/zuuNy9PIOFtWCWPFFgYgt4K8lzhEnYgV
+            8j/f2URocrebn8IW9S6k88kGGImeIdIv4BfHLu/u6YzC8GaupkuPCq+Qqzyq9CLi
+            jOO9i5lhAoGBAMWGptZDb6+SxUR7W8kBTTMEQbkL1nkn0F0twEC6UFMF/xEHb90r
+            oHQ7NA9BjuOkDdDl1p79fXFmRSWbualUASMC9ucf7akHorGQXchfROTinJdcvvJp
+            WH+FJgO0g+QhLdzBaiBv8WqW+oIhkqIQJA7ZwQ0PZKPPOaI4sh5wHpIZAoGBANlL
+            QUwPgqxM7gTsKQlawM/mzY7Uh+9Dwqff48dNwu8vKjaxCCMwa9CJjZmcy8k8mrNv
+            6uNW+NkANGjlE9vf5zLnFj8K2BLKP2w9/VEn21C+Q8tgniNBowqhVPzvePMzHKa4
+            AJ0HTTkhrudKoC81x5gHjKCe69KYbfK8zlrPP9+9AoGAVcb/tJRcb/ZgzDh1x3hV
+            Og5jLCTD4qEzjwNLNdCzCRrVhWOhZH6Jk3AST328u4aGqWzmIu0aCKDM7mQN4Eam
+            p7ml1wC6iGjUch+rWlRk6rCuJ90S3tp4oAgGVh2SGQN/kxo7KBL018Dw0Iobz10L
+            C5fsiethXPGkqZnNYAJ4hCECgYA2tsJMWqN2qzBLwQNcPaPLNbyQuGc6Ef/TsYZz
+            SttIysGAX/dClRCww9IJ2fdeRopVoFquv9mNGoYX24aymKBoqtNpMFvT72Uk5j8A
+            zl5k6GO9tChdjEt3g8QYpFv6MOaH/FD7OTlyp06ZIqtO9+W4HD6Guz16G7OjqXL0
+            XrcgqQKBgBb5ssWf53vla4+J6RfhfwNNl3tRoday9E5pKjAwx7HNjISkYPHR9YAT
+            dAUIjZw5C3pTnSXEgwoJ5GhCnjA1RyTYIwv9dEWOCYWoBddYJlT85y7oP0zHM1h1
+            gZfzVSXFRRJeG02gzkZmEWQJhLS4Hdo6eF9rhH4o88hYCnCMBUWy
+            -----END RSA PRIVATE KEY-----
+        - name: OPENSHIFT_MASTER
+          value: https://atomic-master.miminar.local:8443
+        image: my-docker-registry:latest
+        imagePullPolicy: IfNotPresent
+        name: registry
+        ports:
+        - containerPort: 5000
+          protocol: TCP
+        resources: {}
+        securityContext:
+          privileged: false
+        terminationMessagePath: /dev/termination-log
+        volumeMounts:
+        - mountPath: /distribution
+          name: dist-build
+        - mountPath: /registry
+          name: registry-storage
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      securityContext: {}
+      serviceAccount: registry
+      serviceAccountName: registry
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - hostPath:
+          path: /mnt/shared/docker-registry-build
+        name: dist-build
+      - name: registry-storage
+        nfs:
+          path: /var/shared/persistent-registry-volume
+          server: 192.168.122.1
+  triggers:
+  - type: ConfigChange
+status:
+  details:
+    causes:
+    - type: ConfigChange
+  latestVersion: 11
