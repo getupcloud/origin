@@ -36,7 +36,8 @@ func (ls *layerStore) Exists(digest digest.Digest) (bool, error) {
 }
 
 func (ls *layerStore) Fetch(dgst digest.Digest) (distribution.Layer, error) {
-	ctxu.GetLogger(ls.repository.ctx).Debug("(*layerStore).Fetch")
+	ctxu.GetLogger(ls.repository.ctx).Debugf("(*layerStore).Fetch: starting with dgst=%s", dgst.String())
+	defer ctxu.GetLogger(ls.repository.ctx).Debugf("(*layerStore).Fetch: terminating")
 	bp, err := ls.path(dgst)
 	if err != nil {
 		return nil, err
@@ -68,7 +69,8 @@ func (ls *layerStore) Delete(dgst digest.Digest) error {
 // is already in progress or the layer has already been uploaded, this
 // will return an error.
 func (ls *layerStore) Upload() (distribution.LayerUpload, error) {
-	ctxu.GetLogger(ls.repository.ctx).Debug("(*layerStore).Upload")
+	ctxu.GetLogger(ls.repository.ctx).Debug("(*layerStore).Upload: starting")
+	defer ctxu.GetLogger(ls.repository.ctx).Debug("(*layerStore).Upload: terminating")
 
 	// NOTE(stevvooe): Consider the issues with allowing concurrent upload of
 	// the same two layers. Should it be disallowed? For now, we allow both
@@ -100,13 +102,15 @@ func (ls *layerStore) Upload() (distribution.LayerUpload, error) {
 		return nil, err
 	}
 
+	ctxu.GetLogger(ls.repository.ctx).Debugf("(*layerStore).Upload: returning new uuid=%s", uuid)
 	return ls.newLayerUpload(uuid, path, startedAt)
 }
 
 // Resume continues an in progress layer upload, returning the current
 // state of the upload.
 func (ls *layerStore) Resume(uuid string) (distribution.LayerUpload, error) {
-	ctxu.GetLogger(ls.repository.ctx).Debug("(*layerStore).Resume")
+	ctxu.GetLogger(ls.repository.ctx).Debugf("(*layerStore).Resume: starting with uuid=%s", uuid)
+	defer ctxu.GetLogger(ls.repository.ctx).Debug("(*layerStore).Resume: terminating")
 	startedAtPath, err := ls.repository.pm.path(uploadStartedAtPathSpec{
 		name: ls.repository.Name(),
 		uuid: uuid,
@@ -145,6 +149,8 @@ func (ls *layerStore) Resume(uuid string) (distribution.LayerUpload, error) {
 
 // newLayerUpload allocates a new upload controller with the given state.
 func (ls *layerStore) newLayerUpload(uuid, path string, startedAt time.Time) (distribution.LayerUpload, error) {
+	ctxu.GetLogger(ls.repository.ctx).Debugf("(*layerStore).newLayerUpload: starting with uuid=%s, path=%s, startedAt=%s", uuid, path, startedAt.String())
+	defer ctxu.GetLogger(ls.repository.ctx).Debug("(*layerStore).newLayerUpload: terminating")
 	fw, err := newFileWriter(ls.repository.driver, path)
 	if err != nil {
 		return nil, err
@@ -157,6 +163,7 @@ func (ls *layerStore) newLayerUpload(uuid, path string, startedAt time.Time) (di
 		bufferedFileWriter: *fw,
 	}
 
+	ctxu.GetLogger(ls.repository.ctx).Debug("(*layerStore).newLayerUpload: stopping resumable digester")
 	lw.setupResumableDigester()
 
 	return lw, nil

@@ -17,6 +17,8 @@ import (
 // layerUploadDispatcher constructs and returns the layer upload handler for
 // the given request context.
 func layerUploadDispatcher(ctx *Context, r *http.Request) http.Handler {
+	ctxu.GetLogger(ctx).Debugf("layerUploadDispatcher: starting")
+	defer ctxu.GetLogger(ctx).Debugf("layerUploadDispatcher: terminating")
 	luh := &layerUploadHandler{
 		Context: ctx,
 		UUID:    getUploadUUID(ctx),
@@ -81,6 +83,7 @@ func layerUploadDispatcher(ctx *Context, r *http.Request) http.Handler {
 			// These error conditions should be rare and demonstrate really
 			// problems. We basically cancel the upload and tell the client to
 			// start over.
+			ctxu.GetLogger(luh).Debugf("layerUploadDispatcher: seeking upload to offset: %d", luh.State.Offset)
 			if nn, err := upload.Seek(luh.State.Offset, os.SEEK_SET); err != nil {
 				defer upload.Close()
 				ctxu.GetLogger(ctx).Infof("error seeking layer upload: %v", err)
@@ -121,6 +124,8 @@ type layerUploadHandler struct {
 // StartLayerUpload begins the layer upload process and allocates a server-
 // side upload session.
 func (luh *layerUploadHandler) StartLayerUpload(w http.ResponseWriter, r *http.Request) {
+	ctxu.GetLogger(luh).Debugf("(*layerUploadHandler).StartLayerUpload: starting")
+	defer ctxu.GetLogger(luh).Debugf("(*layerUploadHandler).StartLayerUpload: terminating")
 	layers := luh.Repository.Layers()
 	upload, err := layers.Upload()
 	if err != nil {
@@ -144,6 +149,8 @@ func (luh *layerUploadHandler) StartLayerUpload(w http.ResponseWriter, r *http.R
 
 // GetUploadStatus returns the status of a given upload, identified by uuid.
 func (luh *layerUploadHandler) GetUploadStatus(w http.ResponseWriter, r *http.Request) {
+	ctxu.GetLogger(luh).Debugf("(*layerUploadHandler).GetUploadStatus: starting")
+	defer ctxu.GetLogger(luh).Debugf("(*layerUploadHandler).GetUploadStatus: terminating")
 	if luh.Upload == nil {
 		w.WriteHeader(http.StatusNotFound)
 		luh.Errors.Push(v2.ErrorCodeBlobUploadUnknown)
@@ -165,6 +172,8 @@ func (luh *layerUploadHandler) GetUploadStatus(w http.ResponseWriter, r *http.Re
 
 // PatchLayerData writes data to an upload.
 func (luh *layerUploadHandler) PatchLayerData(w http.ResponseWriter, r *http.Request) {
+	ctxu.GetLogger(luh).Debugf("(*layerUploadHandler).PatchLayerData: starting")
+	defer ctxu.GetLogger(luh).Debugf("(*layerUploadHandler).PatchLayerData: terminating")
 	if luh.Upload == nil {
 		w.WriteHeader(http.StatusNotFound)
 		luh.Errors.Push(v2.ErrorCodeBlobUploadUnknown)
@@ -203,6 +212,8 @@ func (luh *layerUploadHandler) PatchLayerData(w http.ResponseWriter, r *http.Req
 // into the blob store and 201 Created is returned with the canonical
 // url of the layer.
 func (luh *layerUploadHandler) PutLayerUploadComplete(w http.ResponseWriter, r *http.Request) {
+	ctxu.GetLogger(luh).Debugf("(*layerUploadHandler).PutLayerUploadComplete: starting")
+	defer ctxu.GetLogger(luh).Debugf("(*layerUploadHandler).PutLayerUploadComplete: terminating")
 	if luh.Upload == nil {
 		w.WriteHeader(http.StatusNotFound)
 		luh.Errors.Push(v2.ErrorCodeBlobUploadUnknown)
@@ -297,6 +308,8 @@ func (luh *layerUploadHandler) CancelLayerUpload(w http.ResponseWriter, r *http.
 // uploads always start at a 0 offset. This allows disabling resumable push
 // by always returning a 0 offset on check status.
 func (luh *layerUploadHandler) layerUploadResponse(w http.ResponseWriter, r *http.Request, fresh bool) error {
+	ctxu.GetLogger(luh).Debugf("(*layerUploadHandler).layerUploadResponse: starting with fresh: %t", fresh)
+	defer ctxu.GetLogger(luh).Debugf("(*layerUploadHandler).layerUploadResponse: terminating")
 
 	var offset int64
 	if !fresh {
@@ -313,6 +326,8 @@ func (luh *layerUploadHandler) layerUploadResponse(w http.ResponseWriter, r *htt
 	luh.State.UUID = luh.Upload.UUID()
 	luh.State.Offset = offset
 	luh.State.StartedAt = luh.Upload.StartedAt()
+
+	ctxu.GetLogger(luh).Debugf("(*layerUploadHandler).layerUploadResponse: setting State {Name=%s, UUID=%s, Offset=%d, StartedAt=%s}", luh.Repository.Name(), luh.Upload.UUID(), offset, luh.Upload.StartedAt().String())
 
 	token, err := hmacKey(luh.Config.HTTP.Secret).packUploadState(luh.State)
 	if err != nil {

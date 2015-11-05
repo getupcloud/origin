@@ -9,6 +9,7 @@ import (
 	"path"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/base"
 	"github.com/docker/distribution/registry/storage/driver/factory"
@@ -93,6 +94,8 @@ func (d *driver) GetContent(path string) ([]byte, error) {
 
 // PutContent stores the []byte content at a location designated by "path".
 func (d *driver) PutContent(subPath string, contents []byte) error {
+	log.Debugf("(*filesystem.driver).PutContent: starting with subPath=%s, contents of length=%d", subPath, len(contents))
+	defer log.Debugf("(*filesystem.driver).PutContent: terminating")
 	if _, err := d.WriteStream(subPath, 0, bytes.NewReader(contents)); err != nil {
 		return err
 	}
@@ -127,6 +130,8 @@ func (d *driver) ReadStream(path string, offset int64) (io.ReadCloser, error) {
 // WriteStream stores the contents of the provided io.Reader at a location
 // designated by the given path.
 func (d *driver) WriteStream(subPath string, offset int64, reader io.Reader) (nn int64, err error) {
+	log.Debugf("(*filesystem.driver).WriteStream: starting with subPath=%s, offset=%d", subPath, offset)
+	defer log.Debugf("(*filesystem.driver).WriteStream: terminating")
 	// TODO(stevvooe): This needs to be a requirement.
 	// if !path.IsAbs(subPath) {
 	// 	return fmt.Errorf("absolute path required: %q", subPath)

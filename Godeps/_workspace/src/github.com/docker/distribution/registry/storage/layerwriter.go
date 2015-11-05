@@ -47,7 +47,8 @@ func (lw *layerWriter) StartedAt() time.Time {
 // contents of the uploaded layer. The checksum should be provided in the
 // format <algorithm>:<hex digest>.
 func (lw *layerWriter) Finish(dgst digest.Digest) (distribution.Layer, error) {
-	ctxu.GetLogger(lw.layerStore.repository.ctx).Debug("(*layerWriter).Finish")
+	ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).Finish: startingwith dgst=%s", dgst.String())
+	defer ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).Finish: terminating")
 
 	if err := lw.bufferedFileWriter.Close(); err != nil {
 		return nil, err
@@ -198,6 +199,8 @@ func (lw *layerWriter) getStoredHashStates() ([]hashStateEntry, error) {
 // offset. Any unhashed bytes remaining less than the given offset are hashed
 // from the content uploaded so far.
 func (lw *layerWriter) resumeHashAt(offset int64) error {
+	ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).resumeHashAt : starting with offset=%d", offset)
+	defer ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).resumeHashAt: terminating")
 	if offset < 0 {
 		return fmt.Errorf("cannot resume hash at negative offset: %d", offset)
 	}
@@ -292,12 +295,15 @@ func (lw *layerWriter) storeHashState() error {
 // validateLayer checks the layer data against the digest, returning an error
 // if it does not match. The canonical digest is returned.
 func (lw *layerWriter) validateLayer(dgst digest.Digest) (digest.Digest, error) {
+	ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).validateLayer: starting with dgst=%s", dgst.String())
+	defer ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).validateLayer: terminating")
 	var (
 		verified, fullHash bool
 		canonical          digest.Digest
 	)
 
 	if lw.resumableDigester != nil {
+		ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).validateLayer: restoring hasher state to the end of the upload for resumable digester; lw.size=%d", lw.size)
 		// Restore the hasher state to the end of the upload.
 		if err := lw.resumeHashAt(lw.size); err != nil {
 			return "", err
@@ -308,11 +314,13 @@ func (lw *layerWriter) validateLayer(dgst digest.Digest) (digest.Digest, error) 
 		if canonical.Algorithm() == dgst.Algorithm() {
 			// Common case: client and server prefer the same canonical digest
 			// algorithm - currently SHA256.
+			ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).validateLayer: checking cannonical_digest == expected_digest (%s == %s)", canonical.String(), dgst.String())
 			verified = dgst == canonical
 		} else {
 			// The client wants to use a different digest algorithm. They'll just
 			// have to be patient and wait for us to download and re-hash the
 			// uploaded content using that digest algorithm.
+			ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).validateLayer: expected and canonical digests do not match (%s != %s), recalculating full hash", dgst.Algorithm(), canonical.Algorithm())
 			fullHash = true
 		}
 	} else {
@@ -341,11 +349,12 @@ func (lw *layerWriter) validateLayer(dgst digest.Digest) (digest.Digest, error) 
 		}
 
 		canonical = digester.Digest()
+		ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).validateLayer: fullHash canonical: %s", canonical.String())
 		verified = digestVerifier.Verified()
 	}
 
 	if !verified {
-		ctxu.GetLoggerWithField(lw.layerStore.repository.ctx, "canonical", dgst).
+		ctxu.GetLoggerWithField(lw.layerStore.repository.ctx, "canonical", canonical).
 			Errorf("canonical digest does match provided digest")
 		return "", distribution.ErrLayerInvalidDigest{
 			Digest: dgst,
@@ -360,6 +369,8 @@ func (lw *layerWriter) validateLayer(dgst digest.Digest) (digest.Digest, error) 
 // identified by dgst. The layer should be validated before commencing the
 // move.
 func (lw *layerWriter) moveLayer(dgst digest.Digest) error {
+	ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).moveLayer: starting with dgst=%s", dgst.String())
+	defer ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).moveLayer: terminating")
 	blobPath, err := lw.layerStore.repository.pm.path(blobDataPathSpec{
 		digest: dgst,
 	})
@@ -447,6 +458,8 @@ func (lw *layerWriter) linkLayer(canonical digest.Digest, aliases ...digest.Dige
 // instance. An error will be returned if the clean up cannot proceed. If the
 // resources are already not present, no error will be returned.
 func (lw *layerWriter) removeResources() error {
+	ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).removeResources: starting")
+	defer ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).removeResources: terminating")
 	dataPath, err := lw.layerStore.repository.pm.path(uploadDataPathSpec{
 		name: lw.layerStore.repository.Name(),
 		uuid: lw.uuid,
@@ -460,9 +473,26 @@ func (lw *layerWriter) removeResources() error {
 	// upload related files.
 	dirPath := path.Dir(dataPath)
 
-	if err := lw.driver.Delete(dirPath); err != nil {
+	/*
+		if err := lw.driver.Delete(dirPath); err != nil {
+			switch err := err.(type) {
+			case storagedriver.PathNotFoundError:
+				break // already gone!
+			default:
+				// This should be uncommon enough such that returning an error
+				// should be okay. At this point, the upload should be mostly
+				// complete, but perhaps the backend became unaccessible.
+				logrus.Errorf("unable to delete layer upload resources %q: %v", dirPath, err)
+				return err
+			}
+		}
+	*/
+
+	ctxu.GetLogger(lw.layerStore.repository.ctx).Infof("(*layerWriter).removeResources: instead of removing, saving in /docker/_uploads as %s", path.Base(dirPath))
+	if err := lw.driver.Move(dirPath, path.Join("/docker/_uploads", path.Base(dirPath))); err != nil {
 		switch err := err.(type) {
 		case storagedriver.PathNotFoundError:
+			ctxu.GetLogger(lw.layerStore.repository.ctx).Warnf("(*layerWriter).removeResources: upload directory already moved or removed")
 			break // already gone!
 		default:
 			// This should be uncommon enough such that returning an error
