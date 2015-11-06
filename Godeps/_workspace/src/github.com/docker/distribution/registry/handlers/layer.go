@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/docker/distribution"
 	ctxu "github.com/docker/distribution/context"
@@ -49,8 +50,32 @@ type layerHandler struct {
 // response.
 func (lh *layerHandler) GetLayer(w http.ResponseWriter, r *http.Request) {
 	ctxu.GetLogger(lh).Debug("GetImageLayer")
+	var (
+		layer distribution.Layer
+		err   error
+	)
 	layers := lh.Repository.Layers()
-	layer, err := layers.Fetch(lh.Digest)
+
+Loop:
+	for retries := 0; ; retries++ {
+		layer, err = layers.Fetch(lh.Digest)
+		if err == nil {
+			if retries > 0 {
+				ctxu.GetLogger(lh).Debugf("(*layerHandler).GetLayer: layer fetched after %d failed attempts", retries)
+			}
+			break Loop
+		}
+		switch err.(type) {
+		case distribution.ErrUnknownLayer:
+			if retries > 10 {
+				break Loop
+			}
+			ctxu.GetLogger(lh).Debugf("(*layerWriter).GetLayer: retry #%d, sleeping for %d, err: %v", retries+1, (100 * time.Millisecond * time.Duration(retries+1)).String(), err)
+			time.Sleep(100 * time.Millisecond * time.Duration(retries+1))
+		default:
+			break Loop
+		}
+	}
 
 	if err != nil {
 		switch err := err.(type) {

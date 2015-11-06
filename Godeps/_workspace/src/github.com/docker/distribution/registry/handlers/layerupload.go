@@ -180,6 +180,12 @@ func (luh *layerUploadHandler) PatchLayerData(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	defer func() {
+		ctxu.GetLogger(luh).Debugf("(*layerUploadHandler).PatchLayerData: closing luh.Upload")
+		luh.Upload.Close()
+		ctxu.GetLogger(luh).Debugf("(*layerUploadHandler).PatchLayerData: luh.Upload closed")
+	}()
+
 	ct := r.Header.Get("Content-Type")
 	if ct != "" && ct != "application/octet-stream" {
 		w.WriteHeader(http.StatusBadRequest)

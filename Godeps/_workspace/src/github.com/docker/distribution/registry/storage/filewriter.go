@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/Sirupsen/logrus"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 )
 
@@ -46,6 +47,8 @@ var _ fileWriterInterface = &fileWriter{}
 // newFileWriter returns a prepared fileWriter for the driver and path. This
 // could be considered similar to an "open" call on a regular filesystem.
 func newFileWriter(driver storagedriver.StorageDriver, path string) (*bufferedFileWriter, error) {
+	logrus.Debugf("(*layerWriter).newFileWriter: starting with path=%s", path)
+	defer logrus.Debugf("(*layerWriter).newFileWriter: terminating")
 	fw := fileWriter{
 		driver: driver,
 		path:   path,
@@ -65,6 +68,7 @@ func newFileWriter(driver storagedriver.StorageDriver, path string) (*bufferedFi
 
 		fw.size = fi.Size()
 	}
+	logrus.Debugf("(*layerWriter).newFileWriter: fw.size=%d", fw.size)
 
 	buffered := bufferedFileWriter{
 		fileWriter: fw,
@@ -82,6 +86,8 @@ func (bfw *bufferedFileWriter) Write(p []byte) (int, error) {
 // wraps fileWriter.Close to ensure the buffer is flushed
 // before we close the writer.
 func (bfw *bufferedFileWriter) Close() (err error) {
+	logrus.Debugf("(*bufferedFileWriter).Close: starting")
+	defer logrus.Debugf("(*bufferedFileWriter).Close: terminating")
 	if err = bfw.Flush(); err != nil {
 		return err
 	}

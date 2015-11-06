@@ -50,9 +50,11 @@ func (lw *layerWriter) Finish(dgst digest.Digest) (distribution.Layer, error) {
 	ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).Finish: startingwith dgst=%s", dgst.String())
 	defer ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).Finish: terminating")
 
+	ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).Finish: before close: lw.offset=%d, lw.bufferedFileWriter.offset=%d", lw.offset, lw.bufferedFileWriter.offset)
 	if err := lw.bufferedFileWriter.Close(); err != nil {
 		return nil, err
 	}
+	ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).Finish: after close: lw.offset=%d, lw.bufferedFileWriter.offset=%d", lw.offset, lw.bufferedFileWriter.offset)
 
 	var (
 		canonical digest.Digest
@@ -80,8 +82,25 @@ func (lw *layerWriter) Finish(dgst digest.Digest) (distribution.Layer, error) {
 
 	}
 
-	if err := lw.moveLayer(canonical); err != nil {
-		// TODO(stevvooe): Cleanup?
+	// On NFS filesystem file attributes are cached on client. File may
+	// not exist (os.Stat failes with NotExist) few seconds after the write
+	// has been completed.
+	for retries := 0; ; retries++ {
+		err := lw.moveLayer(canonical)
+		if err == nil {
+			if retries > 0 {
+				ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).Finish: layer moved after %d failed attempts", retries)
+			}
+			break
+		}
+		switch err.(type) {
+		case storagedriver.PathNotFoundError:
+			if retries < 50 {
+				ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).Finish: retry #%d, sleeping for %d, err: %v", retries+1, (100 * time.Millisecond * time.Duration(retries+1)).String(), err)
+				time.Sleep(100 * time.Millisecond * time.Duration(retries+1))
+				continue
+			}
+		}
 		return nil, err
 	}
 
@@ -94,7 +113,26 @@ func (lw *layerWriter) Finish(dgst digest.Digest) (distribution.Layer, error) {
 		return nil, err
 	}
 
-	return lw.layerStore.Fetch(canonical)
+	// Fetch layer with a retry. Fetch may fail after an upload of big layer on NFS.
+	for retries := 0; ; retries++ {
+		layer, fetchErr := lw.layerStore.Fetch(canonical)
+		if fetchErr == nil {
+			if retries > 0 {
+				ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).Finish: layer fetched after %d failed attempts", retries)
+			}
+			return layer, nil
+		}
+		switch fetchErr.(type) {
+		case distribution.ErrUnknownLayer:
+			if retries < 3 {
+				ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).Finish: retry #%d, sleeping for %d, err: %v", retries+1, (100 * time.Millisecond * time.Duration(retries+1)).String(), fetchErr)
+				time.Sleep(100 * time.Millisecond * time.Duration(retries+1))
+				continue
+			}
+		}
+		err = fetchErr
+	}
+	return nil, err
 }
 
 // Cancel the layer upload process.
@@ -207,8 +245,10 @@ func (lw *layerWriter) resumeHashAt(offset int64) error {
 
 	if offset == int64(lw.resumableDigester.Len()) {
 		// State of digester is already at the requested offset.
+		ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).resumeHashAt : offset == lw.resumableDigester.Len()", offset, lw.resumableDigester.Len())
 		return nil
 	}
+	ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).resumeHashAt : offset =! lw.resumableDigester.Len()", offset, lw.resumableDigester.Len())
 
 	// List hash states from storage backend.
 	var hashStateMatch hashStateEntry
@@ -216,15 +256,19 @@ func (lw *layerWriter) resumeHashAt(offset int64) error {
 	if err != nil {
 		return fmt.Errorf("unable to get stored hash states with offset %d: %s", offset, err)
 	}
+	ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).resumeHashAt: len(hashStates)=%d", len(hashStates))
 
 	// Find the highest stored hashState with offset less than or equal to
 	// the requested offset.
 	for _, hashState := range hashStates {
+		ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).resumeHashAt: processing hashState: %v", hashState)
 		if hashState.offset == offset {
 			hashStateMatch = hashState
+			ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).resumeHashAt: found hashstate with offset=%d (exact offset match)", hashState.offset)
 			break // Found an exact offset match.
 		} else if hashState.offset < offset && hashState.offset > hashStateMatch.offset {
 			// This offset is closer to the requested offset.
+			ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).resumeHashAt: found closest hashState with offset == %d", hashState.offset)
 			hashStateMatch = hashState
 		} else if hashState.offset > offset {
 			// Remove any stored hash state with offsets higher than this one
@@ -232,6 +276,7 @@ func (lw *layerWriter) resumeHashAt(offset int64) error {
 			// is probably okay to skip for now since we don't expect anyone to
 			// use the API in this way. For that reason, we don't treat an
 			// an error here as a fatal error, but only log it.
+			ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).resumeHashAt: removing hashstate with offset(%d) > %d", hashState.offset, offset)
 			if err := lw.driver.Delete(hashState.path); err != nil {
 				logrus.Errorf("unable to delete stale hash state %q: %s", hashState.path, err)
 			}
@@ -239,6 +284,7 @@ func (lw *layerWriter) resumeHashAt(offset int64) error {
 	}
 
 	if hashStateMatch.offset == 0 {
+		ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).resumeHashAt: resetting hasher")
 		// No need to load any state, just reset the hasher.
 		lw.resumableDigester.Reset()
 	} else {
@@ -247,6 +293,7 @@ func (lw *layerWriter) resumeHashAt(offset int64) error {
 			return err
 		}
 
+		ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).resumeHashAt: restoring from storedState")
 		if err = lw.resumableDigester.Restore(storedState); err != nil {
 			return err
 		}
@@ -254,12 +301,15 @@ func (lw *layerWriter) resumeHashAt(offset int64) error {
 
 	// Mind the gap.
 	if gapLen := offset - int64(lw.resumableDigester.Len()); gapLen > 0 {
+		ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).resumeHashAt: reading the gap of length", gapLen)
 		// Need to read content from the upload to catch up to the desired
 		// offset.
 		fr, err := newFileReader(lw.driver, lw.path)
 		if err != nil {
 			return err
 		}
+
+		defer fr.Close()
 
 		if _, err = fr.Seek(int64(lw.resumableDigester.Len()), os.SEEK_SET); err != nil {
 			return fmt.Errorf("unable to seek to layer reader offset %d: %s", lw.resumableDigester.Len(), err)
@@ -274,6 +324,8 @@ func (lw *layerWriter) resumeHashAt(offset int64) error {
 }
 
 func (lw *layerWriter) storeHashState() error {
+	ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).storeHashState: starting")
+	defer ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).storeHashState: terminating")
 	uploadHashStatePath, err := lw.layerStore.repository.pm.path(uploadHashStatePathSpec{
 		name:   lw.layerStore.repository.Name(),
 		uuid:   lw.uuid,
@@ -289,6 +341,8 @@ func (lw *layerWriter) storeHashState() error {
 		return err
 	}
 
+	ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).storeHashState: storing hashState: %v", hashState)
+
 	return lw.driver.PutContent(uploadHashStatePath, hashState)
 }
 
@@ -303,9 +357,14 @@ func (lw *layerWriter) validateLayer(dgst digest.Digest) (digest.Digest, error) 
 	)
 
 	if lw.resumableDigester != nil {
+		offset := lw.size
+		if offset < lw.offset {
+			// we're probably on NFS where file attributes are cached on client
+			offset = lw.offset
+		}
 		ctxu.GetLogger(lw.layerStore.repository.ctx).Debugf("(*layerWriter).validateLayer: restoring hasher state to the end of the upload for resumable digester; lw.size=%d", lw.size)
 		// Restore the hasher state to the end of the upload.
-		if err := lw.resumeHashAt(lw.size); err != nil {
+		if err := lw.resumeHashAt(offset); err != nil {
 			return "", err
 		}
 
@@ -341,6 +400,8 @@ func (lw *layerWriter) validateLayer(dgst digest.Digest) (digest.Digest, error) 
 		if err != nil {
 			return "", err
 		}
+
+		defer fr.Close()
 
 		tr := io.TeeReader(fr, digester)
 
@@ -473,23 +534,7 @@ func (lw *layerWriter) removeResources() error {
 	// upload related files.
 	dirPath := path.Dir(dataPath)
 
-	/*
-		if err := lw.driver.Delete(dirPath); err != nil {
-			switch err := err.(type) {
-			case storagedriver.PathNotFoundError:
-				break // already gone!
-			default:
-				// This should be uncommon enough such that returning an error
-				// should be okay. At this point, the upload should be mostly
-				// complete, but perhaps the backend became unaccessible.
-				logrus.Errorf("unable to delete layer upload resources %q: %v", dirPath, err)
-				return err
-			}
-		}
-	*/
-
-	ctxu.GetLogger(lw.layerStore.repository.ctx).Infof("(*layerWriter).removeResources: instead of removing, saving in /docker/_uploads as %s", path.Base(dirPath))
-	if err := lw.driver.Move(dirPath, path.Join("/docker/_uploads", path.Base(dirPath))); err != nil {
+	if err := lw.driver.Delete(dirPath); err != nil {
 		switch err := err.(type) {
 		case storagedriver.PathNotFoundError:
 			ctxu.GetLogger(lw.layerStore.repository.ctx).Warnf("(*layerWriter).removeResources: upload directory already moved or removed")
