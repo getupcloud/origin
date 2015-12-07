@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"path"
-	"sort"
 	"strings"
 
 	"github.com/docker/distribution/context"
@@ -32,16 +31,19 @@ func (reg *registry) Repositories(ctx context.Context, repos []string, last stri
 	// to store everything another slice, sort it and then copy it back to our
 	// passed in slice.
 
-	Walk(ctx, reg.blobStore.driver, root, func(fileInfo driver.FileInfo) error {
+	err = WalkSortedChildren(ctx, reg.blobStore.driver, root, func(fileInfo driver.FileInfo) error {
 		filePath := fileInfo.Path()
 
 		// lop the base path off
 		repoPath := filePath[len(root)+1:]
 
 		_, file := path.Split(repoPath)
-		if file == "_layers" {
-			repoPath = strings.TrimSuffix(repoPath, "/_layers")
+		if file == layersDirectory {
+			repoPath = strings.TrimSuffix(repoPath, "/"+layersDirectory)
 			if repoPath > last {
+				if len(foundRepos) >= len(repos) {
+					return ErrStopWalking
+				}
 				foundRepos = append(foundRepos, repoPath)
 			}
 			return ErrSkipDir
@@ -52,11 +54,10 @@ func (reg *registry) Repositories(ctx context.Context, repos []string, last stri
 		return nil
 	})
 
-	sort.Strings(foundRepos)
 	n = copy(repos, foundRepos)
 
 	// Signal that we have no more entries by setting EOF
-	if len(foundRepos) <= len(repos) {
+	if len(foundRepos) < len(repos) || (err == nil && len(foundRepos) == len(repos)) {
 		errVal = io.EOF
 	}
 
