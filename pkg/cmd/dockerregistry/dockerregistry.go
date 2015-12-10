@@ -27,6 +27,11 @@ import (
 
 // Execute runs the Docker registry.
 func Execute(configFile io.Reader) {
+	if server.RegistryURL = os.Getenv("REGISTRY_URL"); server.RegistryURL == "" {
+		log.Fatalf("REGISTRY_URL environment variable needs to be set")
+	}
+	// Prevent a warning of "unrecognized environment variable"
+	os.Unsetenv("REGISTRY_URL")
 	config, err := configuration.Parse(configFile)
 	if err != nil {
 		log.Fatalf("Error parsing configuration file: %s", err)

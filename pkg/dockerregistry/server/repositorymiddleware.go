@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
@@ -23,6 +22,10 @@ import (
 	"github.com/openshift/origin/pkg/client"
 	imageapi "github.com/openshift/origin/pkg/image/api"
 )
+
+// RegistryURL is an external URL of docker registry and a component name of
+// image reference. It needs to be set during registry's start.
+var RegistryURL string
 
 func init() {
 	repomw.Register("openshift", repomw.InitFunc(newRepository))
@@ -42,9 +45,8 @@ var _ distribution.ManifestService = &repository{}
 
 // newRepository returns a new repository middleware.
 func newRepository(ctx context.Context, repo distribution.Repository, options map[string]interface{}) (distribution.Repository, error) {
-	registryAddr := os.Getenv("REGISTRY_URL")
-	if len(registryAddr) == 0 {
-		return nil, errors.New("REGISTRY_URL is required")
+	if RegistryURL == "" {
+		return nil, errors.New("RegistryURL needs to be set.")
 	}
 
 	registryClient, err := NewRegistryOpenShiftClient()
@@ -62,7 +64,7 @@ func newRepository(ctx context.Context, repo distribution.Repository, options ma
 
 		ctx:               ctx,
 		registryInterface: registryClient,
-		registryAddr:      registryAddr,
+		registryAddr:      RegistryURL,
 		namespace:         nameParts[0],
 		name:              nameParts[1],
 	}, nil
